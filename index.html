@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle Financeiro</title>
+<style>
+  :root{
+    --bg1:#0b1120;
+    --bg2:#111c33;
+    --panel:#1a2438;
+    --panel-2:#222f48;
+    --border:#2f3f5c;
+    --text:#e6edf7;
+    --muted:#8ea2c0;
+    --green:#22c55e;
+    --red:#f05252;
+    --accent:#38bdf8;
+    --radius:14px;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  body{
+    font-family:'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    background:radial-gradient(1200px 600px at 20% -10%, #1b2b4d 0%, var(--bg1) 55%) fixed;
+    color:var(--text);
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+
+  .app{ max-width:1080px; margin:0 auto; display:flex; flex-direction:column; gap:20px; }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; flex-wrap:wrap;
+  }
+  header h1{ font-size:1.5rem; letter-spacing:-.4px; }
+  header h1 span{ color:var(--accent); }
+
+  .btn-ghost{
+    background:transparent; color:var(--muted);
+    border:1px solid var(--border); border-radius:10px;
+    padding:9px 14px; font-size:.85rem; cursor:pointer;
+    transition:.2s;
+  }
+  .btn-ghost:hover{ color:var(--red); border-color:var(--red); }
+
+  /* ---------- Cards resumo ---------- */
+  .cards{
+    display:grid; gap:14px;
+    grid-template-columns:repeat(auto-fit, minmax(190px,1fr));
+  }
+  .card{
+    background:linear-gradient(160deg, var(--panel-2), var(--panel));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::after{
+    content:''; position:absolute; inset:0 auto 0 0; width:4px;
+    background:var(--accent);
+  }
+  .card.receita::after{ background:var(--green); }
+  .card.despesa::after{ background:var(--red); }
+
+  .card .label{
+    font-size:.75rem; text-transform:uppercase; letter-spacing:1.2px;
+    color:var(--muted); margin-bottom:8px; font-weight:600;
+  }
+  .card .valor{ font-size:1.55rem; font-weight:700; letter-spacing:-.5px; }
+  .card.receita .valor{ color:var(--green); }
+  .card.despesa .valor{ color:var(--red); }
+  .card.saldo .valor.pos{ color:var(--green); }
+  .card.saldo .valor.neg{ color:var(--red); }
+
+  /* ---------- Painéis ---------- */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media(max-width:780px){ .grid{ grid-template-columns:1fr; } }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+  }
+  .panel h2{
+    font-size:.95rem; margin-bottom:16px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:1px; font-weight:600;
+  }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-bottom:14px; flex-wrap:wrap;
+  }
+  .panel-head h2{ margin-bottom:0; }
+
+  /* Navegação entre meses */
+  .month-nav{
+    display:flex; align-items:center; gap:6px;
+  }
+  .month-nav button{
+    width:32px; height:32px;
+    border-radius:9px; cursor:pointer;
+    background:var(--bg2); color:var(--text);
+    border:1px solid var(--border);
+    font-size:1.1rem; line-height:1;
+    display:grid; place-items:center;
+    transition:.2s;
+    font-family:inherit;
+  }
+  .month-nav button:hover:not(:disabled){
+    border-color:var(--accent); color:var(--accent);
+  }
+  .month-nav button:disabled{
+    opacity:.3; cursor:not-allowed;
+  }
+  .label-mes{
+    min-width:150px; text-align:center;
+    font-weight:600; font-size:.9rem; color:var(--text);
+    user-select:none;
+  }
+
+  .chart-legend{
+    display:flex; gap:14px; font-size:.75rem; color:var(--muted);
+    margin-bottom:12px;
+  }
+  .chart-legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .chart-legend i{
+    width:10px; height:10px; border-radius:3px; display:inline-block;
+  }
+
+  /* ---------- Canvas / tooltip ---------- */
+  .canvas-wrap{ position:relative; width:100%; }
+  .canvas-wrap canvas{ display:block; }
+
+  .tooltip{
+    position:absolute; pointer-events:none;
+    background:rgba(9,15,28,.96);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:9px 12px;
+    font-size:.78rem; line-height:1.55;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);
+    opacity:0; transform:translate(-50%, 0);
+    transition:opacity .15s;
+    white-space:nowrap; z-index:10;
+  }
+  .tooltip.show{ opacity:1; }
+
+  /* ---------- Formulário ---------- */
+  form{ display:flex; flex-direction:column; gap:14px; }
+
+  .field label{
+    display:block; font-size:.78rem; color:var(--muted);
+    margin-bottom:6px; font-weight:600;
+  }
+  input[type="text"], input[type="number"], input[type="date"], select{
+    width:100%; padding:11px 13px;
+    background:var(--bg2); color:var(--text);
+    border:1px solid var(--border); border-radius:10px;
+    font-size:.9rem; font-family:inherit;
+    outline:none; transition:.2s;
+  }
+  input:focus, select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(56,189,248,.15); }
+  input[type="date"]{ color-scheme:dark; }
+
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  /* Segmented control */
+  .segmented{ display:flex; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:4px; gap:4px; }
+  .segmented label{ flex:1; }
+  .segmented input{ display:none; }
+  .segmented span{
+    display:block; text-align:center; padding:9px; border-radius:7px;
+    font-size:.85rem; font-weight:600; color:var(--muted);
+    cursor:pointer; transition:.2s; user-select:none;
+  }
+  .segmented input:checked + span{ background:var(--panel-2); color:var(--text); }
+  .segmented input[value="receita"]:checked + span{ background:rgba(34,197,94,.15); color:var(--green); }
+  .segmented input[value="despesa"]:checked + span{ background:rgba(240,82,82,.15); color:var(--red); }
+
+  button.btn-add{
+    padding:13px; border:none; border-radius:10px; cursor:pointer;
+    background:linear-gradient(135deg,#38bdf8,#2563eb);
+    color:#fff; font-size:.92rem; font-weight:700; letter-spacing:.3px;
+    transition:.2s;
+  }
+  button.btn-add:hover{ filter:brightness(1.12); transform:translateY(-1px); }
+  button.btn-add:active{ transform:translateY(0); }
+
+  /* ---------- Gráfico horizontal ---------- */
+  .chart{ display:flex; flex-direction:column; gap:12px; }
+  .bar-item{ font-size:.82rem; }
+  .bar-head{ display:flex; justify-content:space-between; margin-bottom:5px; }
+  .bar-head .nome{ color:var(--text); font-weight:600; }
+  .bar-head .val{ color:var(--muted); }
+  .bar-track{ height:9px; background:var(--bg2); border-radius:99px; overflow:hidden; }
+  .bar-fill{
+    height:100%; border-radius:99px;
+    background:linear-gradient(90deg,#38bdf8,#818cf8);
+    transition:width .5s cubic-bezier(.4,0,.2,1);
+  }
+  .empty{ color:var(--muted); font-size:.85rem; text-align:center; padding:24px 0; }
+
+  /* ---------- Lista ---------- */
+  .filtros{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .filtro{
+    padding:7px 14px; border-radius:99px; cursor:pointer;
+    background:var(--bg2); border:1px solid var(--border);
+    color:var(--muted); font-size:.8rem; font-weight:600;
+    transition:.2s;
+  }
+  .filtro:hover{ color:var(--text); }
+  .filtro.ativo{ background:var(--accent); border-color:var(--accent); color:#06101f; }
+
+  ul#lista{ list-style:none; display:flex; flex-direction:column; gap:8px; }
+
+  .item{
+    display:flex; align-items:center; gap:14px;
+    background:var(--panel-2); border:1px solid var(--border);
+    border-radius:11px; padding:12px 14px;
+    transition:.2s;
+  }
+  .item:hover{ border-color:#3f5578; }
+
+  .item .icon{
+    width:38px; height:38px; flex:0 0 38px;
+    display:grid; place-items:center;
+    border-radius:10px; font-size:1rem;
+  }
+  .item.receita .icon{ background:rgba(34,197,94,.13); }
+  .item.despesa .icon{ background:rgba(240,82,82,.13); }
+
+  .item .info{ flex:1; min-width:0; }
+  .item .desc{
+    font-size:.92rem; font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .item .meta{ font-size:.75rem; color:var(--muted); margin-top:3px; }
+
+  .item .valor{ font-weight:700; font-size:.95rem; white-space:nowrap; }
+  .item.receita .valor{ color:var(--green); }
+  .item.despesa .valor{ color:var(--red); }
+
+  .item .del{
+    background:transparent; border:none; cursor:pointer;
+    color:var(--muted); font-size:1.15rem; line-height:1;
+    padding:6px 8px; border-radius:8px; transition:.2s;
+  }
+  .item .del:hover{ color:var(--red); background:rgba(240,82,82,.1); }
+
+  footer{ text-align:center; color:var(--muted); font-size:.75rem; padding-top:8px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <h1>💰 Controle <span>Financeiro</span></h1>
+    <button class="btn-ghost" id="btnLimpar">Limpar tudo</button>
+  </header>
+
+  <!-- RESUMO -->
+  <section class="cards">
+    <div class="card saldo">
+      <div class="label">Saldo</div>
+      <div class="valor" id="cSaldo">R$ 0,00</div>
+    </div>
+    <div class="card receita">
+      <div class="label">Receitas</div>
+      <div class="valor" id="cReceita">R$ 0,00</div>
+    </div>
+    <div class="card despesa">
+      <div class="label">Despesas</div>
+      <div class="valor" id="cDespesa">R$ 0,00</div>
+    </div>
+  </section>
+
+  <!-- GRÁFICO MENSAL -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Movimentações do mês</h2>
+      <div class="month-nav">
+        <button id="btnPrevMes" type="button" aria-label="Mês anterior">‹</button>
+        <span class="label-mes" id="labelMes">—</span>
+        <button id="btnNextMes" type="button" aria-label="Próximo mês">›</button>
+      </div>
+    </div>
+    <div class="chart-legend">
+      <span><i style="background:#22c55e"></i> Receitas</span>
+      <span><i style="background:#f05252"></i> Despesas</span>
+    </div>
+    <div class="canvas-wrap" id="wrapMensal">
+      <canvas id="chartMensal"></canvas>
+      <div class="tooltip" id="tooltipMensal"></div>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <!-- FORMULÁRIO -->
+    <section class="panel">
+      <h2>Nova transação</h2>
+      <form id="form">
+        <div class="segmented">
+          <label>
+            <input type="radio" name="tipo" value="despesa" checked>
+            <span>− Despesa</span>
+          </label>
+          <label>
+            <input type="radio" name="tipo" value="receita">
+            <span>+ Receita</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label for="descricao">Descrição</label>
+          <input type="text" id="descricao" placeholder="Ex: Mercado, Salário..." maxlength="60" required>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="valor">Valor (R$)</label>
+            <input type="number" id="valor" step="0.01" min="0.01" placeholder="0,00" required>
+          </div>
+          <div class="field">
+            <label for="data">Data</label>
+            <input type="date" id="data" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="categoria">Categoria</label>
+          <select id="categoria"></select>
+        </div>
+
+        <button type="submit" class="btn-add">Adicionar transação</button>
+      </form>
+    </section>
+
+    <!-- GRÁFICO POR CATEGORIA -->
+    <section class="panel">
+      <h2>Despesas por categoria</h2>
+      <div class="chart" id="chart"></div>
+    </section>
+
+  </div>
+
+  <!-- LISTA -->
+  <section class="panel">
+    <h2>Transações</h2>
+    <div class="filtros">
+      <button class="filtro ativo" data-filtro="todas">Todas</button>
+      <button class="filtro" data-filtro="receita">Receitas</button>
+      <button class="filtro" data-filtro="despesa">Despesas</button>
+    </div>
+    <ul id="lista"></ul>
+  </section>
+
+  <footer>Os dados ficam salvos apenas neste navegador (localStorage).</footer>
+</div>
+
+<script>
+/* ====================== CONFIG ====================== */
+const STORAGE_KEY = 'controle-financeiro-v1';
+
+const CATEGORIAS = {
+  receita: ['Salário', 'Freelance', 'Investimentos', 'Vendas', 'Presente', 'Outros'],
+  despesa: ['Alimentação', 'Moradia', 'Transporte', 'Saúde', 'Educação',
+            'Lazer', 'Compras', 'Contas', 'Assinaturas', 'Outros']
+};
+
+const ICONES = {
+  'Salário':'💼','Freelance':'🧑‍💻','Investimentos':'📈','Vendas':'🛒','Presente':'🎁',
+  'Alimentação':'🍽️','Moradia':'🏠','Transporte':'🚗','Saúde':'💊','Educação':'📚',
+  'Lazer':'🎬','Compras':'🛍️','Contas':'📄','Assinaturas':'🔁','Outros':'📌'
+};
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const fmt = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+
+/* ====================== ESTADO ====================== */
+let transacoes = carregar();
+let filtroAtual = 'todas';
+let hoverMensal = -1;
+let layoutMensal = null;
+
+const _hoje = new Date();
+let mesAtual = { ano: _hoje.getFullYear(), mes: _hoje.getMonth() };
+
+function carregar(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function salvar(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(transacoes));
+}
+
+/* ====================== HELPERS ====================== */
+function hojeLocal(){
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function formatarData(iso){
+  const [a,m,d] = iso.split('-');
+  return `${d}/${m}/${a}`;
+}
+function compacto(v){
+  if (v >= 1e6) return (v/1e6).toFixed(1).replace('.', ',') + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(v >= 1e4 ? 0 : 1).replace('.', ',') + 'k';
+  return Math.round(v).toString();
+}
+function escalaBonita(max){
+  if (max <= 0) return 100;
+  const exp = Math.pow(10, Math.floor(Math.log10(max)));
+  const n = max / exp;
+  let nice;
+  if (n <= 1) nice = 1;
+  else if (n <= 2) nice = 2;
+  else if (n <= 5) nice = 5;
+  else nice = 10;
+  return nice * exp;
+}
+function chaveMes(ano, mes){
+  return `${ano}-${String(mes+1).padStart(2,'0')}`;
+}
+function ehMesAtual(){
+  const h = new Date();
+  return mesAtual.ano === h.getFullYear() && mesAtual.mes === h.getMonth();
+}
+
+/* ====================== ELEMENTOS ====================== */
+const form        = document.getElementById('form');
+const elDescricao = document.getElementById('descricao');
+const elValor     = document.getElementById('valor');
+const elData      = document.getElementById('data');
+const elCategoria = document.getElementById('categoria');
+const lista       = document.getElementById('lista');
+const chart       = document.getElementById('chart');
+const labelMes    = document.getElementById('labelMes');
+const btnPrevMes  = document.getElementById('btnPrevMes');
+const btnNextMes  = document.getElementById('btnNextMes');
+const canvasMensal= document.getElementById('chartMensal');
+const tooltipMensal = document.getElementById('tooltipMensal');
+
+/* ====================== CATEGORIAS DINÂMICAS ====================== */
+function tipoSelecionado(){
+  return form.querySelector('input[name="tipo"]:checked').value;
+}
+function atualizarCategorias(){
+  const tipo = tipoSelecionado();
+  const anterior = elCategoria.value;
+  elCategoria.innerHTML = CATEGORIAS[tipo]
+    .map(c => `<option value="${c}">${ICONES[c] || '📌'} ${c}</option>`)
+    .join('');
+  if (CATEGORIAS[tipo].includes(anterior)) elCategoria.value = anterior;
+}
+form.querySelectorAll('input[name="tipo"]').forEach(r =>
+  r.addEventListener('change', atualizarCategorias)
+);
+
+/* ====================== ADICIONAR ====================== */
+form.addEventListener('submit', e => {
+  e.preventDefault();
+
+  const valor = parseFloat(elValor.value);
+  if (!elDescricao.value.trim() || !(valor > 0) || !elData.value) return;
+
+  transacoes.push({
+    id: Date.now() + Math.random(),
+    tipo: tipoSelecionado(),
+    descricao: elDescricao.value.trim(),
+    valor: valor,
+    categoria: elCategoria.value,
+    data: elData.value
+  });
+
+  salvar();
+  render();
+
+  form.reset();
+  elData.value = hojeLocal();
+  atualizarCategorias();
+  elDescricao.focus();
+});
+
+/* ====================== REMOVER ====================== */
+lista.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-id]');
+  if (!btn) return;
+  transacoes = transacoes.filter(t => String(t.id) !== btn.dataset.id);
+  salvar();
+  render();
+});
+
+/* ====================== FILTROS ====================== */
+document.querySelectorAll('.filtro').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filtro').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    filtroAtual = btn.dataset.filtro;
+    renderLista();
+  });
+});
+
+/* ====================== LIMPAR ====================== */
+document.getElementById('btnLimpar').addEventListener('click', () => {
+  if (!transacoes.length) return;
+  if (confirm('Tem certeza que deseja apagar todas as transações?')) {
+    transacoes = [];
+    salvar();
+    render();
+  }
+});
+
+/* ====================== NAVEGAÇÃO DE MESES ====================== */
+function atualizarNavMes(){
+  labelMes.textContent = MESES[mesAtual.mes] + ' ' + mesAtual.ano;
+  btnNextMes.disabled = ehMesAtual();
+}
+
+function mudarMes(delta){
+  let ano = mesAtual.ano;
+  let mes = mesAtual.mes + delta;
+  if (mes < 0){ mes = 11; ano--; }
+  if (mes > 11){ mes = 0; ano++; }
+
+  // Não permite ir além do mês atual
+  const h = new Date();
+  if (ano > h.getFullYear() || (ano === h.getFullYear() && mes > h.getMonth())) return;
+
+  mesAtual = { ano, mes };
+  hoverMensal = -1;
+  tooltipMensal.classList.remove('show');
+  atualizarNavMes();
+  desenharBarrasMensais();
+}
+
+btnPrevMes.addEventListener('click', () => mudarMes(-1));
+btnNextMes.addEventListener('click', () => mudarMes(1));
+
+/* ====================== DADOS DO MÊS ====================== */
+function dadosDoMes(ano, mes){
+  const key = chaveMes(ano, mes);
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+  const porDia = {};
+  for (let d = 1; d <= diasNoMes; d++){
+    porDia[d] = { receita:0, despesa:0 };
+  }
+  transacoes.forEach(t => {
+    if (t.data.slice(0, 7) !== key) return;
+    const dia = parseInt(t.data.slice(8, 10), 10);
+    if (!porDia[dia]) return;
+    if (t.tipo === 'receita') porDia[dia].receita += t.valor;
+    else porDia[dia].despesa += t.valor;
+  });
+  return { porDia, diasNoMes };
+}
+
+/* ====================== GRÁFICO MENSAL ====================== */
+function roundRect(ctx, x, y, w, h, r){
+  if (h < 1) h = 1;
+  if (h < r * 2) r = h / 2;
+  if (w < r * 2) r = w / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function desenharBarrasMensais(){
+  if (!canvasMensal) return;
+  const wrap = canvasMensal.parentElement;
+  const W = wrap.clientWidth;
+  if (W < 10) return;
+  const H = 300;
+  const dpr = window.devicePixelRatio || 1;
+
+  canvasMensal.width = W * dpr;
+  canvasMensal.height = H * dpr;
+  canvasMensal.style.width = W + 'px';
+  canvasMensal.style.height = H + 'px';
+
+  const ctx = canvasMensal.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const { porDia, diasNoMes } = dadosDoMes(mesAtual.ano, mesAtual.mes);
+  const totalMov = Object.values(porDia)
+    .reduce((s, d) => s + d.receita + d.despesa, 0);
+
+  if (totalMov === 0){
+    ctx.fillStyle = '#8ea2c0';
+    ctx.font = '13px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      'Nenhuma movimentação em ' + MESES[mesAtual.mes] + ' ' + mesAtual.ano,
+      W / 2, H / 2
+    );
+    layoutMensal = null;
+    return;
+  }
+
+  const pad = { top:24, right:20, bottom:44, left:70 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
+  const slotW = cw / diasNoMes;
+  const barW = Math.max(3, Math.min(8, slotW * 0.30));
+  const gap  = Math.max(1, Math.min(3, slotW * 0.08));
+  const baseY = pad.top + ch;
+
+  const maxVal = Math.max(1, ...Object.values(porDia)
+    .map(d => Math.max(d.receita, d.despesa)));
+  const escala = escalaBonita(maxVal * 1.15);
+
+  layoutMensal = { porDia, diasNoMes, pad, cw, ch, slotW };
+
+  /* grid + labels Y */
+  const intervalos = 4;
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  for (let i = 0; i <= intervalos; i++){
+    const y = pad.top + ch * (1 - i / intervalos);
+    ctx.strokeStyle = 'rgba(148,163,184,0.10)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + cw, y);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8ea2c0';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('R$ ' + compacto(escala * i / intervalos), pad.left - 10, y);
+  }
+
+  /* barras por dia */
+  for (let dia = 1; dia <= diasNoMes; dia++){
+    const idx = dia - 1;
+    const d = porDia[dia];
+    const cx = pad.left + slotW * (idx + 0.5);
+    const isHover = hoverMensal === idx;
+
+    if (isHover){
+      ctx.fillStyle = 'rgba(56,189,248,0.08)';
+      ctx.fillRect(pad.left + slotW * idx, pad.top, slotW, ch);
+    }
+
+    const totalW = barW * 2 + gap;
+    const x1 = cx - totalW / 2;
+    const x2 = x1 + barW + gap;
+
+    const hR = (d.receita / escala) * ch;
+    if (hR > 0){
+      ctx.fillStyle = isHover ? '#22c55e' : 'rgba(34,197,94,.8)';
+      roundRect(ctx, x1, baseY - hR, barW, hR, Math.min(3, barW / 2));
+      ctx.fill();
+    }
+
+    const hD = (d.despesa / escala) * ch;
+    if (hD > 0){
+      ctx.fillStyle = isHover ? '#f05252' : 'rgba(240,82,82,.8)';
+      roundRect(ctx, x2, baseY - hD, barW, hD, Math.min(3, barW / 2));
+      ctx.fill();
+    }
+  }
+
+  /* labels X (dias) */
+  const minSpacing = 22;
+  const stepLabel = Math.max(1, Math.ceil(minSpacing / slotW));
+  const mostrar = new Set([1, diasNoMes]);
+  for (let d = stepLabel; d < diasNoMes; d += stepLabel) mostrar.add(d);
+
+  ctx.font = '10px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let dia = 1; dia <= diasNoMes; dia++){
+    if (!mostrar.has(dia)) continue;
+    const cx = pad.left + slotW * (dia - 0.5);
+    const isHover = hoverMensal === dia - 1;
+    ctx.fillStyle = isHover ? '#e6edf7' : '#8ea2c0';
+    ctx.font = (isHover ? 'bold ' : '') + '10px system-ui, -apple-system, sans-serif';
+    ctx.fillText(String(dia), cx, baseY + 10);
+  }
+}
+
+/* ====================== HOVER / TOOLTIP ====================== */
+canvasMensal.addEventListener('mousemove', e => {
+  if (!layoutMensal){
+    tooltipMensal.classList.remove('show');
+    return;
+  }
+  const rect = canvasMensal.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const { pad, cw, ch, slotW, diasNoMes, porDia } = layoutMensal;
+
+  const dentro =
+    x >= pad.left && x <= pad.left + cw &&
+    y >= pad.top && y <= pad.top + ch;
+
+  if (!dentro){
+    if (hoverMensal !== -1){
+      hoverMensal = -1;
+      desenharBarrasMensais();
+    }
+    tooltipMensal.classList.remove('show');
+    return;
+  }
+
+  let idx = Math.floor((x - pad.left) / slotW);
+  idx = Math.max(0, Math.min(diasNoMes - 1, idx));
+
+  if (hoverMensal !== idx){
+    hoverMensal = idx;
+    desenharBarrasMensais();
+  }
+
+  const dia = idx + 1;
+  const d = porDia[dia];
+  const saldo = d.receita - d.despesa;
+
+  tooltipMensal.innerHTML = `
+    <div style="font-weight:700; margin-bottom:4px;">
+      Dia ${String(dia).padStart(2,'0')}/${String(mesAtual.mes+1).padStart(2,'0')}
+    </div>
+    <div style="color:#22c55e;">+ ${fmt(d.receita)}</div>
+    <div style="color:#f05252;">− ${fmt(d.despesa)}</div>
+    <div style="color:#8ea2c0; margin-top:5px; font-size:.72rem;
+                border-top:1px solid #2f3f5c; padding-top:5px;">
+      Saldo: <b style="color:${saldo >= 0 ? '#22c55e' : '#f05252'}">${fmt(saldo)}</b>
+    </div>
+  `;
+
+  const centerX = pad.left + slotW * (idx + 0.5);
+  const clampX = Math.max(90, Math.min(canvasMensal.clientWidth - 90, centerX));
+  tooltipMensal.style.left = clampX + 'px';
+  tooltipMensal.style.top = '8px';
+  tooltipMensal.classList.add('show');
+});
+
+canvasMensal.addEventListener('mouseleave', () => {
+  hoverMensal = -1;
+  tooltipMensal.classList.remove('show');
+  desenharBarrasMensais();
+});
+
+/* ====================== RENDER ====================== */
+function render(){
+  renderResumo();
+  renderChart();
+  atualizarNavMes();
+  desenharBarrasMensais();
+  renderLista();
+}
+
+function renderResumo(){
+  const receita = transacoes.filter(t => t.tipo === 'receita')
+                            .reduce((s,t) => s + t.valor, 0);
+  const despesa = transacoes.filter(t => t.tipo === 'despesa')
+                            .reduce((s,t) => s + t.valor, 0);
+  const saldo = receita - despesa;
+
+  const elSaldo = document.getElementById('cSaldo');
+  elSaldo.textContent = fmt(saldo);
+  elSaldo.className = 'valor ' + (saldo >= 0 ? 'pos' : 'neg');
+
+  document.getElementById('cReceita').textContent = fmt(receita);
+  document.getElementById('cDespesa').textContent = fmt(despesa);
+}
+
+function renderChart(){
+  const porCategoria = {};
+  transacoes
+    .filter(t => t.tipo === 'despesa')
+    .forEach(t => {
+      porCategoria[t.categoria] = (porCategoria[t.categoria] || 0) + t.valor;
+    });
+
+  const entradas = Object.entries(porCategoria).sort((a,b) => b[1] - a[1]);
+
+  if (!entradas.length){
+    chart.innerHTML = '<p class="empty">Nenhuma despesa registrada ainda.</p>';
+    return;
+  }
+
+  const max = entradas[0][1];
+  const total = entradas.reduce((s,[,v]) => s + v, 0);
+
+  chart.innerHTML = entradas.map(([cat, val]) => {
+    const pct = (val / max) * 100;
+    const share = ((val / total) * 100).toFixed(0);
+    return `
+      <div class="bar-item">
+        <div class="bar-head">
+          <span class="nome">${ICONES[cat] || '📌'} ${cat}</span>
+          <span class="val">${fmt(val)} · ${share}%</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderLista(){
+  const filtradas = transacoes
+    .filter(t => filtroAtual === 'todas' || t.tipo === filtroAtual)
+    .sort((a,b) => b.data.localeCompare(a.data) || b.id - a.id);
+
+  if (!filtradas.length){
+    lista.innerHTML = '<p class="empty">Nenhuma transação encontrada.</p>';
+    return;
+  }
+
+  lista.innerHTML = filtradas.map(t => `
+    <li class="item ${t.tipo}">
+      <div class="icon">${ICONES[t.categoria] || '📌'}</div>
+      <div class="info">
+        <div class="desc">${escapeHtml(t.descricao)}</div>
+        <div class="meta">${t.categoria} · ${formatarData(t.data)}</div>
+      </div>
+      <div class="valor">${t.tipo === 'receita' ? '+' : '−'} ${fmt(t.valor)}</div>
+      <button class="del" data-id="${t.id}" title="Excluir" aria-label="Excluir">✕</button>
+    </li>
+  `).join('');
+}
+
+function escapeHtml(str){
+  return str.replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[c]);
+}
+
+/* ====================== RESPONSIVO ====================== */
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    hoverMensal = -1;
+    tooltipMensal.classList.remove('show');
+    desenharBarrasMensais();
+  }, 120);
+});
+
+/* ====================== INICIALIZAÇÃO ====================== */
+elData.value = hojeLocal();
+atualizarCategorias();
+render();
+</script>
+</body>
+</html>
